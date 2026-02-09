@@ -1071,6 +1071,14 @@
                     updateTotais();
                 };
 
+                // Prevent clicks/focus inside the inputs from bubbling to the parent
+                // (parent has a click handler that opens the detail modal)
+                Array.from(inputs).forEach(inp => {
+                    inp.addEventListener('click', e => e.stopPropagation());
+                    inp.addEventListener('mousedown', e => e.stopPropagation());
+                    inp.addEventListener('focus', e => e.stopPropagation());
+                });
+
                 // botão remover
                 itemDiv.querySelector(".remove-btn").onclick = (e) => {
                     e.stopPropagation();
