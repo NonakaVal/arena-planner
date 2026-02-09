@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Planner de Catálogo</title>
+    <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, Helvetica, sans-serif;
+            background: #0f1115;
+            color: #e6e6e6;
+        }
+
+        header {
+            background: #171a21;
+            padding: 12px 18px;
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 1px solid #2a2f3a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .upload-btn {
+            background: #2b65ff;
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            font-size: 13px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        .container {
+            display: flex;
+            height: calc(100vh - 50px);
+        }
+
+        /* LEFT PANEL */
+        .left {
+            width: 68%;
+            overflow: auto;
+        }
+
+        .controls {
+            padding: 10px;
+            background: #14171d;
+            border-bottom: 1px solid #2a2f3a;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .controls input,
+        .controls select {
+            background: #0e1014;
+            color: white;
+            border: 1px solid #333;
+            padding: 6px 8px;
+            font-size: 13px;
+            min-width: 150px;
+        }
+
+        .price-range {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            background: #0e1014;
+            border: 1px solid #333;
+            padding: 0 8px;
+            border-radius: 4px;
+            height: 32px;
+        }
+
+        .price-range input {
+            width: 70px;
+            background: transparent;
+            border: none;
+            padding: 0;
+            font-size: 12px;
+            color: white;
+            text-align: center;
+        }
+
+        .price-range input::placeholder {
+            color: #666;
+        }
+
+        .price-range span {
+            color: #a8b3c7;
+            font-size: 12px;
+        }
+
+        .sort-select {
+            background: #0e1014;
+            color: white;
+            border: 1px solid #333;
+            padding: 6px 8px;
+            font-size: 13px;
+            min-width: 150px;
+            border-radius: 4px;
+        }
+
+        .counters {
+            margin-left: auto;
+            display: flex;
+            gap: 12px;
+            font-size: 12px;
+            color: #a8b3c7;
+        }
+
+        .counter {
+            background: #1a1f27;
+            padding: 4px 8px;
+            border-radius: 4px;
+            border: 1px solid #2a2f3a;
+        }
+
+        /* TABLE */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        thead {
+            background: #1b2028;
+            position: sticky;
+            top: 0;
+        }
+
+        th,
+        td {
+            padding: 8px;
+            border-bottom: 1px solid #262b35;
+            font-size: 13px;
+        }
+
+        tr:hover {
+            background: #1a1f27;
+        }
+
+        tr.selected {
+            background: #1a2b3c;
+        }
+
+        .sort-header {
+            cursor: pointer;
+            user-select: none;
+            position: relative;
+            padding-right: 20px !important;
+        }
+
+        .sort-header:hover {
+            background: #2a2f3a;
+        }
+
+        .sort-arrow {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #a8b3c7;
+            font-size: 12px;
+        }
+
+        img.thumb {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+
+        .price-cell {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .stock-cell {
+            font-size: 12px;
+        }
+
+        .in-stock {
+            color: #4CAF50;
+        }
+
+        .out-stock {
+            color: #ff4444;
+        }
+
+        /* RIGHT PANEL */
+        .right {
+            width: 32%;
+            border-left: 1px solid #2a2f3a;
+            background: #101318;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .selection-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #2a2f3a;
+            background: #14171d;
+        }
+
+        .selected-list {
+            overflow: auto;
+            flex: 1;
+        }
+
+        .selected-item {
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #242830;
+            padding: 8px;
+            position: relative;
+            gap: 8px;
+        }
+
+        .selected-item:hover {
+            background: #1a1f27;
+        }
+
+        .selected-img {
+            width: 40px;
+            height: 40px;
+            object-fit: cover;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+
+        .selected-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .selected-name {
+            font-size: 12px;
+            font-weight: bold;
+            color: #ffffff;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin-bottom: 2px;
+        }
+
+        .selected-price {
+            font-size: 11px;
+            color: #a8b3c7;
+            margin-bottom: 4px;
+        }
+
+        .selected-fields {
+            display: flex;
+            gap: 4px;
+            align-items: center;
+        }
+
+        .field {
+            width: calc(50% - 2px);
+            background: #0e1014;
+            border: 1px solid #333;
+            color: white;
+            padding: 4px 6px;
+            font-size: 11px;
+            border-radius: 3px;
+        }
+
+        .field::placeholder {
+            color: #666;
+        }
+
+        .remove-btn {
+            background: none;
+            border: none;
+            color: #ff4444;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px;
+            flex-shrink: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* TOTAL PANEL */
+        .total-panel {
+            padding: 10px;
+            border-top: 1px solid #2a2f3a;
+            background: #14171d;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+        }
+
+        .total-label {
+            color: #a8b3c7;
+        }
+
+        .total-value {
+            font-weight: bold;
+            color: #4CAF50;
+        }
+
+        .min-value {
+            color: #ff9800;
+        }
+
+        .max-value {
+            color: #2196F3;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            padding: 10px;
+            border-top: 1px solid #2a2f3a;
+            background: #14171d;
+        }
+
+        .action-btn {
+            flex: 1;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            text-align: center;
+            background: #2b65ff;
+            color: white;
+            border-radius: 4px;
+        }
+
+        .action-btn.secondary {
+            background: #333;
+        }
+
+        .action-btn.danger {
+            background: #ff4444;
+        }
+
+        .action-btn:hover {
+            opacity: 0.9;
+        }
+
+        /* MODAL */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: #1a1f27;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #2a2f3a;
+        }
+
+        .modal-header {
+            padding: 15px;
+            background: #14171d;
+            border-bottom: 1px solid #2a2f3a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 15px;
+            overflow: auto;
+            max-height: calc(80vh - 60px);
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: #a8b3c7;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 0;
+            width: 24px;
+            height: 24px;
+        }
+
+        .product-images {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            overflow-x: auto;
+            padding-bottom: 10px;
+        }
+
+        .product-images img {
+            width: 120px;
+            height: 120px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #333;
+        }
+
+        .details-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .detail-group {
+            margin-bottom: 10px;
+        }
+
+        .detail-label {
+            font-size: 11px;
+            color: #a8b3c7;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .detail-value {
+            font-size: 14px;
+            color: #ffffff;
+        }
+
+        /* UPLOAD AREA */
+        .upload-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: calc(30vh - 50px);
+            padding: 40px;
+            text-align: center;
+        }
+
+        .upload-icon {
+            font-size: 60px;
+            color: #2b65ff;
+            margin-bottom: 20px;
+        }
+
+        .upload-text {
+            font-size: 18px;
+            margin-bottom: 10px;
+            color: #ffffff;
+        }
+
+        .upload-subtext {
+            font-size: 14px;
+            color: #a8b3c7;
+            margin-bottom: 30px;
+            max-width: 500px;
+        }
+
+        .selected-item.clickable {
+            cursor: pointer;
+        }
+
+        .selected-item.clickable:hover {
+            background: #242830 !important;
+        }
+
+        .zoom-btn {
+            background: #2b65ff;
+            border: none;
+            color: white;
+            padding: 6px 12px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+
+        .zoom-btn:hover {
+            opacity: 0.9;
+        }
+
+        .product-images.zoomed {
+            scale: 1.5;
+        }
+
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+
+        .lightbox.active {
+            display: flex;
+        }
+
+        .lightbox img {
+            max-width: 90%;
+            max-height: 80vh;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+            z-index: 2001;
+        }
+
+        .lightbox-nav {
+            position: absolute;
+            bottom: 20px;
+            color: white;
+            font-size: 14px;
+        }
+
+        .manual-add-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1500;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .manual-add-content {
+            background: #1a1f27;
+            width: 90%;
+            max-width: 500px;
+            border-radius: 8px;
+            border: 1px solid #2a2f3a;
+            overflow: hidden;
+        }
+
+        .manual-add-header {
+            padding: 15px;
+            background: #14171d;
+            border-bottom: 1px solid #2a2f3a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+        }
+
+        .manual-add-body {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .manual-add-body input {
+            background: #0e1014;
+            color: white;
+            border: 1px solid #333;
+            padding: 8px;
+            font-size: 13px;
+            border-radius: 4px;
+        }
+
+        .manual-add-body input::placeholder {
+            color: #666;
+        }
+
+        .manual-add-footer {
+            padding: 15px;
+            border-top: 1px solid #2a2f3a;
+            display: flex;
+            gap: 8px;
+        }
+
+        .manual-add-footer button {
+            flex: 1;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            font-size: 13px;
+            border-radius: 4px;
+        }
+
+        .manual-add-footer .confirm-btn {
+            background: #2b65ff;
+            color: white;
+        }
+
+        .manual-add-footer .cancel-btn {
+            background: #333;
+            color: white;
+        }
+
+        .add-item-btn {
+            background: #2b65ff;
+            border: none;
+            color: white;
+            padding: 4px 8px;
+            font-size: 12px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin-left: auto;
+        }
+
+        .add-item-btn:hover {
+            opacity: 0.9;
+        }
+    </style>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>
+<text x='50%' y='50%' dominant-baseline='central' text-anchor='middle' font-size='48'>⚔</text>
+</svg>">
+</head>
+
+<body>
+
+    <header>
+        <span>Planejamento de Catálogo</span>
+        <span id="itemsLoaded" style="font-size: 12px; color: #a8b3c7; margin-left: auto; margin-right: 20px;"></span>
+        <input type="file" id="fileInput" accept=".csv" style="display:none">
+        <input type="file" id="planningInput" accept=".csv" style="display:none">
+        <div style="display: flex; gap: 8px;">
+            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Carregar CSV</button>
+            <button class="upload-btn" onclick="document.getElementById('planningInput').click()">Importar Planejamento</button>
+        </div>
+    </header>
+
+    <div class="container" id="mainContainer">
+
+        <!-- Upload Area (inicial) -->
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">📊</div>
+            <div class="upload-text">Carregue seu arquivo CSV para começar</div>
+            <div class="upload-subtext">O arquivo deve conter os dados dos produtos com colunas como: Nome produto,
+                Descrição, Imagem, Preço, Estoque, Marca, etc.</div>
+            <button class="action-btn" onclick="document.getElementById('fileInput').click()">Selecionar
+                Arquivo</button>
+            <div style="margin-top:20px; font-size:12px; color:#666;">
+                Arraste e solte um arquivo CSV aqui
+            </div>
+        </div>
+
+        <!-- Conteúdo principal (escondido inicialmente) -->
+        <div id="contentArea" style="display:none; width:100%;">
+            <div class="left">
+
+                <div class="controls">
+                    <input type="text" id="search" placeholder="Buscar produto..." oninput="renderTable()">
+                    <select id="categoria" onchange="renderTable()">
+                        <option value="">Todas categorias</option>
+                    </select>
+                    <select id="marca" onchange="renderTable()">
+                        <option value="">Todas marcas</option>
+                    </select>
+                    <select id="disponivel" onchange="renderTable()">
+                        <option value="">Disponibilidade</option>
+                        <option value="Sim">Disponível</option>
+                        <option value="Não">Indisponível</option>
+                    </select>
+                    <select id="estoque" onchange="renderTable()">
+                        <option value="">Situação estoque</option>
+                        <option value="com">Com estoque</option>
+                        <option value="sem">Sem estoque</option>
+                    </select>
+
+                    <div class="price-range">
+                        <input type="text" id="precoMin" placeholder="R$ Min" oninput="renderTable()"
+                            style="text-align:right;">
+                        <span>a</span>
+                        <input type="text" id="precoMax" placeholder="R$ Max" oninput="renderTable()">
+                    </div>
+
+                    <select class="sort-select" id="sortSelect" onchange="renderTable()">
+                        <option value="">Ordenar por...</option>
+                        <option value="preco_asc">Preço: Menor → Maior</option>
+                        <option value="preco_desc">Preço: Maior → Menor</option>
+                    </select>
+
+                    <div class="counters">
+                        <div class="counter" id="totalCount">Total: 0</div>
+                        <div class="counter" id="selectedCount">Selecionados: 0</div>
+                    </div>
+                </div>
+
+                <table id="table">
+                    <thead>
+                        <tr>
+                            <th style="width:30px;"></th>
+                            <th style="width:60px;">Imagem</th>
+                            <th>Produto</th>
+                            <th style="width:120px;">Categoria</th>
+                            <th style="width:100px;">Marca</th>
+                            <th style="width:100px;" class="sort-header" onclick="toggleSort('preco')">
+                                Preço
+                                <span class="sort-arrow" id="priceSortArrow">↕</span>
+                            </th>
+                            <th style="width:80px;">Estoque</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+
+            </div>
+
+            <div class="right">
+
+                <div class="selection-header">
+                    <div>Planejamento</div>
+                    <div style="display:flex; gap:8px; align-items:center;">
+                        <div style="font-size:12px; color:#a8b3c7;" id="selectionCount">0 itens</div>
+                        <button class="add-item-btn" onclick="openManualAddModal()">+ Adicionar</button>
+                    </div>
+                </div>
+
+                <div class="selected-list" id="selected"></div>
+
+                <div class="total-panel">
+                    <div class="total-row">
+                        <span class="total-label">Valor Original:</span>
+                        <span class="total-value" id="totalOriginal">R$ 0,00</span>
+                    </div>
+                    <div class="total-row">
+                        <span class="total-label">Valor Mínimo:</span>
+                        <span class="total-value min-value" id="totalMinimo">R$ 0,00</span>
+                    </div>
+                    <div class="total-row">
+                        <span class="total-label">Valor Máximo:</span>
+                        <span class="total-value max-value" id="totalMaximo">R$ 0,00</span>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button class="action-btn secondary" onclick="document.getElementById('planningInput').click()">Importar Planejamento</button>
+                    <button class="action-btn secondary" onclick="clearSelection()">Limpar Seleção</button>
+                    <button class="action-btn" onclick="exportPlan()">Exportar Planejamento</button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Detalhes -->
+    <div class="modal" id="detailModal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div id="modalTitle">Detalhes do Produto</div>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-body" id="modalBody">
+                <!-- Conteúdo dinâmico -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Lightbox para Zoom de Imagens -->
+    <div class="lightbox" id="imageLightbox">
+        <button class="lightbox-close" onclick="closeLightbox()">×</button>
+        <img id="lightboxImage" src="" alt="">
+        <div class="lightbox-nav" id="lightboxNav"></div>
+    </div>
+
+    <!-- Modal para Adicionar Item Manual -->
+    <div class="manual-add-modal" id="manualAddModal">
+        <div class="manual-add-content">
+            <div class="manual-add-header">
+                <div>Adicionar Item Manual</div>
+                <button class="modal-close" onclick="closeManualAddModal()" style="position:static; margin:0;">×</button>
+            </div>
+            <div class="manual-add-body">
+                <input type="text" id="manualItemName" placeholder="Nome do Item">
+                <input type="text" id="manualItemPrice" placeholder="Preço (R$)">
+                <input type="text" id="manualItemMin" placeholder="Valor Mínimo">
+                <input type="text" id="manualItemMax" placeholder="Valor Máximo">
+            </div>
+            <div class="manual-add-footer">
+                <button class="cancel-btn" onclick="closeManualAddModal()">Cancelar</button>
+                <button class="confirm-btn" onclick="confirmManualAdd()">Adicionar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let produtos = [];
+        let selecionados = {};
+        let currentData = [];
+
+        function toMoney(v) {
+            let n = parseFloat(v || 0);
+            return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        }
+
+        function getPrice(p) {
+            let priceStr = p["Preço venda"] || "0";
+            priceStr = priceStr.replace(/[^\d,\.]/g, '').replace(',', '.');
+            return parseFloat(priceStr) || 0;
+        }
+
+        function parseValorMonetario(valor) {
+            if (!valor) return 0;
+            let str = valor.replace(/[^\d,.\-]/g, '').replace(',', '.');
+            let isNeg = valor.includes('-');
+            let num = parseFloat(str) || 0;
+            return isNeg ? -Math.abs(num) : num;
+        }
+
+        function detectDelimiter(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const firstLine = e.target.result.split('\n')[0];
+                    const semiColonCount = (firstLine.match(/;/g) || []).length;
+                    const commaCount = (firstLine.match(/,/g) || []).length;
+                    const delimiter = semiColonCount > commaCount ? ";" : ",";
+                    resolve(delimiter);
+                };
+                reader.readAsText(file);
+            });
+        }
+
+        async function loadCSV(file) {
+            try {
+                const delimiter = await detectDelimiter(file);
+                Papa.parse(file, {
+                    header: true,
+                    delimiter: delimiter,
+                    skipEmptyLines: true,
+                    complete: function (results) {
+                        produtos = results.data.filter(p => p["Nome produto"]);
+                        currentData = [...produtos];
+
+                        document.getElementById('uploadArea').style.display = 'none';
+                        document.getElementById('contentArea').style.display = 'flex';
+                        
+                        document.getElementById('itemsLoaded').textContent = `${produtos.length} itens carregados`;
+
+                        popularFiltros();
+                        renderTable();
+                        atualizarLista();
+                        updateCounters();
+                    },
+                    error: function(error) {
+                        alert('Erro ao carregar arquivo CSV: ' + error.message);
+                    }
+                });
+            } catch (error) {
+                alert('Erro ao processar arquivo: ' + error.message);
+            }
+        }
+
+        /* ---------------- EVENTOS INICIAIS ---------------- */
+
+        document.addEventListener('DOMContentLoaded', function () {
+
+            const fileInput = document.getElementById('fileInput');
+            const planningInput = document.getElementById('planningInput');
+            const uploadArea = document.getElementById('uploadArea');
+
+            fileInput.addEventListener('change', e => {
+                if (e.target.files.length) loadCSV(e.target.files[0]);
+            });
+
+            planningInput.addEventListener('change', e => {
+                if (e.target.files.length) importPlanning(e.target.files[0]);
+            });
+
+            uploadArea.addEventListener('dragover', e => {
+                e.preventDefault(); 
+                uploadArea.style.background = '#1a1f27';
+            });
+
+            uploadArea.addEventListener('dragleave', e => {
+                e.preventDefault(); 
+                uploadArea.style.background = 'transparent';
+            });
+
+            uploadArea.addEventListener('drop', e => {
+                e.preventDefault(); 
+                uploadArea.style.background = 'transparent';
+                if (e.dataTransfer.files.length) {
+                    const file = e.dataTransfer.files[0];
+                    if (file.name.endsWith('.csv')) {
+                        loadCSV(file);
+                    } else {
+                        alert('Por favor, selecione um arquivo CSV');
+                    }
+                }
+            });
+
+            // DELEGATION TABLE
+            const tbody = document.querySelector("#table tbody");
+
+            tbody.addEventListener("change", function (e) {
+                if (!e.target.classList.contains("row-check")) return;
+
+                const tr = e.target.closest("tr");
+                const nome = tr.dataset.nome;
+                const produto = produtos.find(p => p["Nome produto"] == nome);
+
+                if (e.target.checked) {
+                    selecionados[nome] = { 
+                        produto, 
+                        valorMinimo: '', 
+                        valorMaximo: '',
+                        isManual: false
+                    };
+                } else {
+                    delete selecionados[nome];
+                }
+
+                atualizarLista();
+                updateTotais();
+                updateCounters();
+                renderTable();
+            });
+
+            tbody.addEventListener("click", function (e) {
+                if (e.target.classList.contains("detail-btn")) {
+                    const nome = e.target.closest("tr").dataset.nome;
+                    showDetail(nome);
+                }
+            });
+        });
+
+        /* ---------------- FILTROS ---------------- */
+
+        function popularFiltros() {
+            let categorias = new Set();
+            let marcas = new Set();
+            produtos.forEach(p => {
+                if (p["Nome categoria"]) categorias.add(p["Nome categoria"]);
+                if (p["Marca"]) marcas.add(p["Marca"]);
+            });
+
+            const cat = document.getElementById("categoria");
+            cat.innerHTML = '<option value="">Todas categorias</option>';
+            categorias.forEach(c => cat.append(new Option(c, c)));
+
+            const mar = document.getElementById("marca");
+            mar.innerHTML = '<option value="">Todas marcas</option>';
+            marcas.forEach(m => mar.append(new Option(m, m)));
+        }
+
+        function parseValorFiltro(valor) {
+            if (!valor) return null;
+            let str = valor.replace(/[^\d,\.]/g, '').replace(',', '.');
+            return parseFloat(str) || null;
+        }
+
+        /* ---------------- RENDER TABELA ---------------- */
+
+        function renderTable() {
+            let termo = document.getElementById("search").value.toLowerCase();
+            let cat = document.getElementById("categoria").value;
+            let mar = document.getElementById("marca").value;
+            let disp = document.getElementById("disponivel").value;
+            let stock = document.getElementById("estoque").value;
+            let precoMin = parseValorFiltro(document.getElementById("precoMin").value);
+            let precoMax = parseValorFiltro(document.getElementById("precoMax").value);
+
+            currentData = produtos.filter(p => {
+                let nomeMatch = !termo || (p["Nome produto"] || "").toLowerCase().includes(termo);
+                let catMatch = !cat || p["Nome categoria"] == cat;
+                let marMatch = !mar || p["Marca"] == mar;
+                let dispMatch = !disp || p["Disponível"] == disp;
+
+                let stockMatch = true;
+                if (stock === "com") stockMatch = parseInt(p["Estoque atual"] || 0) > 0;
+                if (stock === "sem") stockMatch = parseInt(p["Estoque atual"] || 0) <= 0;
+
+                let preco = getPrice(p);
+                let precoMatch = (precoMin === null || preco >= precoMin) && (precoMax === null || preco <= precoMax);
+
+                return nomeMatch && catMatch && marMatch && dispMatch && stockMatch && precoMatch;
+            });
+
+            document.getElementById("totalCount").textContent = `Total: ${currentData.length}`;
+
+            const tbody = document.querySelector("#table tbody");
+            tbody.innerHTML = "";
+
+            currentData.forEach(p => {
+                const selected = selecionados[p["Nome produto"]];
+                const tr = document.createElement("tr");
+                tr.dataset.nome = p["Nome produto"];
+                if (selected) tr.classList.add("selected");
+
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="row-check" ${selected ? "checked" : ""}></td>
+                    <td><img class="thumb detail-btn" src="${p["Imagem principal"] || ''}" onerror="this.style.display='none'"></td>
+                    <td class="detail-btn">${p["Nome produto"]}</td>
+                    <td>${p["Nome categoria"] || ""}</td>
+                    <td>${p["Marca"] || ""}</td>
+                    <td class="price-cell">${toMoney(getPrice(p))}</td>
+                    <td>${p["Estoque atual"] || 0}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        /* ---------------- LISTA SELECIONADOS ---------------- */
+
+        function atualizarLista() {
+            const div = document.getElementById("selected");
+            div.innerHTML = "";
+
+            Object.keys(selecionados).forEach(nome => {
+                let item = selecionados[nome];
+                let preco = getPrice(item.produto);
+                let img = item.produto["Imagem principal"] || '';
+
+                let itemDiv = document.createElement("div");
+                itemDiv.className = "selected-item clickable";
+                if (item.isManual) {
+                    itemDiv.style.borderLeft = "3px solid #ff9800";
+                }
+
+                itemDiv.innerHTML = `
+                    <img class="selected-img" src="${img}" onerror="this.style.display='none'">
+                    <div class="selected-info">
+                        <div class="selected-name">${nome}</div>
+                        <div class="selected-price">${toMoney(preco)} ${item.isManual ? '<span style="color:#ff9800; font-size:10px;">(Manual)</span>' : ''}</div>
+                        <div class="selected-fields">
+                            <input class="field" type="text" value="${item.valorMinimo}" placeholder="Mín">
+                            <input class="field" type="text" value="${item.valorMaximo}" placeholder="Máx">
+                        </div>
+                    </div>
+                    <button class="remove-btn">×</button>
+                `;
+
+                // eventos input Mín/Máx
+                const inputs = itemDiv.querySelectorAll(".field");
+                inputs[0].oninput = e => {
+                    item.valorMinimo = e.target.value;
+                    updateTotais();
+                };
+                inputs[1].oninput = e => {
+                    item.valorMaximo = e.target.value;
+                    updateTotais();
+                };
+
+                // botão remover
+                itemDiv.querySelector(".remove-btn").onclick = (e) => {
+                    e.stopPropagation();
+                    delete selecionados[nome];
+                    renderTable();
+                    atualizarLista();
+                    updateTotais();
+                    updateCounters();
+                };
+
+                // clique para ver detalhes
+                itemDiv.onclick = () => {
+                    showDetail(nome);
+                };
+
+                div.appendChild(itemDiv);
+            });
+
+            updateCounters();
+            updateTotais();
+        }
+
+        /* ---------------- TOTAIS ---------------- */
+
+        function updateTotais() {
+            let totalOriginal = 0, totalMinimo = 0, totalMaximo = 0, produtosComMin = 0, produtosComMax = 0;
+
+            Object.values(selecionados).forEach(item => {
+                let preco = getPrice(item.produto);
+                totalOriginal += preco;
+
+                let valMin = parseValorMonetario(item.valorMinimo);
+                let valMax = parseValorMonetario(item.valorMaximo);
+
+                if (item.valorMinimo && item.valorMinimo.trim() !== "") { 
+                    totalMinimo += valMin; 
+                    produtosComMin++; 
+                }
+                if (item.valorMaximo && item.valorMaximo.trim() !== "") { 
+                    totalMaximo += valMax; 
+                    produtosComMax++; 
+                }
+            });
+
+            document.getElementById("totalOriginal").textContent = toMoney(totalOriginal);
+            document.getElementById("totalMinimo").textContent = toMoney(totalMinimo);
+            document.getElementById("totalMaximo").textContent = toMoney(totalMaximo);
+
+            let minLabel = document.querySelector('.total-panel .total-row:nth-child(2) .total-label');
+            let maxLabel = document.querySelector('.total-panel .total-row:nth-child(3) .total-label');
+
+            minLabel.textContent = produtosComMin > 0 ? `Valor Mínimo (${produtosComMin} ${produtosComMin === 1 ? 'item' : 'itens'}):` : 'Valor Mínimo:';
+            maxLabel.textContent = produtosComMax > 0 ? `Valor Máximo (${produtosComMax} ${produtosComMax === 1 ? 'item' : 'itens'}):` : 'Valor Máximo:';
+        }
+
+        /* ---------------- CONTADORES ---------------- */
+
+        function updateCounters() {
+            let n = Object.keys(selecionados).length;
+            document.getElementById("selectedCount").textContent = `Selecionados: ${n}`;
+            document.getElementById("selectionCount").textContent = `${n} itens`;
+        }
+
+        /* ---------------- FUNÇÕES AUXILIARES ---------------- */
+
+        function clearSelection() {
+            if (confirm("Tem certeza que deseja limpar toda a seleção?")) {
+                selecionados = {};
+                atualizarLista();
+                updateTotais();
+                updateCounters();
+                renderTable();
+            }
+        }
+
+        /* ---------------- MODAL ---------------- */
+
+        function showDetail(nome) {
+            let p = produtos.find(x => x["Nome produto"] == nome);
+            if (!p && selecionados[nome]) {
+                p = selecionados[nome].produto;
+            }
+            if (!p) return;
+
+            document.getElementById("modalTitle").textContent = p["Nome produto"];
+
+            let images = [];
+            for (let i = 1; i <= 4; i++) {
+                let key = i === 1 ? "Imagem principal" : `Imagem ${i}`;
+                if (p[key]) images.push(p[key]);
+            }
+
+            const body = document.getElementById("modalBody");
+            body.innerHTML = '';
+            if (images.length > 0) {
+                body.innerHTML = `
+                    <button class="zoom-btn" onclick="toggleZoom()">🔍 Zoom</button>
+                    <div class="product-images" id="productImages">${images.map(img => `<img src="${img}" onerror="this.style.display='none'">`).join('')}</div>
+                `;
+            }
+
+            body.innerHTML += `
+                <div class="details-grid">
+                    <div class="detail-group"><div class="detail-label">Nome</div><div class="detail-value">${p["Nome produto"] || '—'}</div></div>
+                    <div class="detail-group"><div class="detail-label">Marca</div><div class="detail-value">${p["Marca"] || '—'}</div></div>
+                    <div class="detail-group"><div class="detail-label">Categoria</div><div class="detail-value">${p["Nome categoria"] || '—'}</div></div>
+                    <div class="detail-group"><div class="detail-label">Preço</div><div class="detail-value">${toMoney(getPrice(p))}</div></div>
+                    <div class="detail-group"><div class="detail-label">Estoque</div><div class="detail-value">${p["Estoque atual"] || 0}</div></div>
+                    <div class="detail-group"><div class="detail-label">Disponível</div><div class="detail-value">${p["Disponível"] === 'Sim' ? '✓ Disponível' : '✗ Indisponível'}</div></div>
+                </div>
+                <div class="detail-group"><div class="detail-label">Descrição</div><div class="detail-value" style="white-space:pre-wrap;padding:10px;background:#14171d;border-radius:4px;">${(p["Descrição grande"] || "Sem descrição").replace(/<[^>]*>/g, '')}</div></div>
+            `;
+
+            document.getElementById("detailModal").style.display = "flex";
+        }
+
+        function closeModal() { 
+            document.getElementById("detailModal").style.display = "none";
+            const images = document.getElementById("productImages");
+            if (images) images.classList.remove("zoomed");
+        }
+        
+        function toggleZoom() {
+            const images = document.getElementById("productImages");
+            if (images && images.children.length > 0) {
+                const firstImage = images.children[0].src;
+                openLightbox(firstImage, images);
+            }
+        }
+        
+        function openLightbox(imageSrc, container) {
+            const lightbox = document.getElementById("imageLightbox");
+            const lightboxImg = document.getElementById("lightboxImage");
+            lightboxImg.src = imageSrc;
+            
+            // Store all images for navigation
+            const allImages = Array.from(container.querySelectorAll('img')).map(img => img.src);
+            lightbox.dataset.images = JSON.stringify(allImages);
+            lightbox.dataset.currentIndex = 0;
+            
+            updateLightboxNav();
+            lightbox.classList.add("active");
+        }
+        
+        function closeLightbox() {
+            document.getElementById("imageLightbox").classList.remove("active");
+        }
+        
+        function updateLightboxNav() {
+            const lightbox = document.getElementById("imageLightbox");
+            const images = JSON.parse(lightbox.dataset.images || "[]");
+            const currentIndex = parseInt(lightbox.dataset.currentIndex || 0);
+            const nav = document.getElementById("lightboxNav");
+            nav.textContent = images.length > 1 ? `${currentIndex + 1} / ${images.length}` : '';
+        }
+        
+        function openManualAddModal() {
+            document.getElementById("manualAddModal").style.display = "flex";
+        }
+        
+        function closeManualAddModal() {
+            document.getElementById("manualAddModal").style.display = "none";
+            document.getElementById("manualItemName").value = '';
+            document.getElementById("manualItemPrice").value = '';
+            document.getElementById("manualItemMin").value = '';
+            document.getElementById("manualItemMax").value = '';
+        }
+        
+        function confirmManualAdd() {
+            const nome = document.getElementById("manualItemName").value.trim();
+            const preco = document.getElementById("manualItemPrice").value.trim();
+            const min = document.getElementById("manualItemMin").value.trim();
+            const max = document.getElementById("manualItemMax").value.trim();
+            
+            if (!nome) {
+                alert('Por favor, insira um nome para o item');
+                return;
+            }
+            
+            if (selecionados[nome]) {
+                alert('Este item já está na lista');
+                return;
+            }
+            
+            // Create a mock product object for manual items
+            const mockProduct = {
+                "Nome produto": nome,
+                "Preço venda": preco || "0",
+                "Imagem principal": '',
+                "Marca": '',
+                "Nome categoria": 'Manual',
+                "Estoque atual": 0,
+                "Disponível": "Sim"
+            };
+            
+            selecionados[nome] = {
+                produto: mockProduct,
+                valorMinimo: min,
+                valorMaximo: max,
+                isManual: true
+            };
+            
+            atualizarLista();
+            updateTotais();
+            updateCounters();
+            closeManualAddModal();
+        }
+        
+        async function importPlanning(file) {
+            try {
+                const delimiter = await detectDelimiter(file);
+                Papa.parse(file, {
+                    header: true,
+                    delimiter: delimiter,
+                    skipEmptyLines: true,
+                    complete: function (results) {
+                        // Limpar seleção anterior
+                        selecionados = {};
+                        
+                        let itemsLoaded = 0;
+                        let itemsNotFound = [];
+                        
+                        // Processar cada linha do planejamento
+                        results.data.forEach(row => {
+                            const nome = row["Nome Produto"] || row["Nome produto"] || row["Nome"] || '';
+                            if (!nome || nome.trim() === "") return;
+                            
+                            const valMin = row["Valor Mínimo"] || row["valorMinimo"] || '';
+                            const valMax = row["Valor Máximo"] || row["valorMaximo"] || '';
+                            const preco = row["Preço Original"] || row["Preço"] || "0";
+                            const imgPrincipal = row["URL Imagem Principal"] || row["Imagem principal"] || '';
+                            
+                            // Tentar encontrar o produto na base de dados
+                            const produto = produtos.find(p => p["Nome produto"] === nome);
+                            
+                            if (produto) {
+                                // Produto encontrado, usar dados reais
+                                selecionados[nome] = {
+                                    produto: produto,
+                                    valorMinimo: valMin,
+                                    valorMaximo: valMax,
+                                    isManual: false
+                                };
+                                itemsLoaded++;
+                            } else {
+                                // Produto não encontrado, criar item manual com dados do arquivo
+                                // Coletar todas as URLs de imagens disponíveis
+                                let imagensAdicionais = [];
+                                if (row["URLs Imagens Adicionais"]) {
+                                    imagensAdicionais = row["URLs Imagens Adicionais"].split(';').map(url => url.trim()).filter(url => url);
+                                }
+                                
+                                const mockProduct = {
+                                    "Nome produto": nome,
+                                    "Preço venda": preco,
+                                    "Imagem principal": imgPrincipal,
+                                    "Imagem 2": imagensAdicionais[0] || '',
+                                    "Imagem 3": imagensAdicionais[1] || '',
+                                    "Imagem 4": imagensAdicionais[2] || '',
+                                    "Marca": row["Marca"] || '',
+                                    "Nome categoria": 'Importado',
+                                    "Estoque atual": 0,
+                                    "Disponível": "Sim",
+                                    "Descrição grande": row["Descrição"] || ''
+                                };
+                                
+                                selecionados[nome] = {
+                                    produto: mockProduct,
+                                    valorMinimo: valMin,
+                                    valorMaximo: valMax,
+                                    isManual: true
+                                };
+                                itemsLoaded++;
+                                itemsNotFound.push(nome);
+                            }
+                        });
+                        
+                        // Se ainda não tiver carregado produtos, mostrar interface
+                        if (produtos.length === 0) {
+                            document.getElementById('uploadArea').style.display = 'none';
+                            document.getElementById('contentArea').style.display = 'flex';
+                            document.getElementById('itemsLoaded').textContent = `${itemsLoaded} itens importados`;
+                        }
+                        
+                        // Atualizar interface
+                        atualizarLista();
+                        updateTotais();
+                        updateCounters();
+                        renderTable();
+                        
+                        // Feedback visual
+                        let message = `Planejamento importado com sucesso! ${itemsLoaded} itens carregados.`;
+                        if (itemsNotFound.length > 0) {
+                            message += `\n\n${itemsNotFound.length} itens não encontrados na base de dados foram criados como manuais:`;
+                            if (itemsNotFound.length <= 10) {
+                                itemsNotFound.forEach(item => {
+                                    message += `\n• ${item}`;
+                                });
+                            } else {
+                                message += `\n(Primeiros 10 de ${itemsNotFound.length} itens)`;
+                                itemsNotFound.slice(0, 10).forEach(item => {
+                                    message += `\n• ${item}`;
+                                });
+                            }
+                        }
+                        
+                        setTimeout(() => {
+                            alert(message);
+                        }, 500);
+                    },
+                    error: function(error) {
+                        alert('Erro ao importar planejamento: ' + error.message);
+                    }
+                });
+            } catch (error) {
+                alert('Erro ao processar arquivo de planejamento: ' + error.message);
+            }
+        }
+        
+        function exportPlan() {
+            if (Object.keys(selecionados).length === 0) {
+                alert('Nenhum item selecionado para exportar!');
+                return;
+            }
+            
+            let csv = 'Nome Produto,Preço Original,Valor Mínimo,Valor Máximo,URL Imagem Principal,URLs Imagens Adicionais,Marca,Categoria,Descrição\n';
+            
+            Object.keys(selecionados).forEach(nome => {
+                let item = selecionados[nome];
+                let preco = getPrice(item.produto);
+                let valMin = item.valorMinimo || '';
+                let valMax = item.valorMaximo || '';
+                let imgPrincipal = item.produto["Imagem principal"] || '';
+                
+                // Coletar todas as imagens adicionais
+                let imagens = [];
+                for (let i = 2; i <= 4; i++) {
+                    let key = `Imagem ${i}`;
+                    if (item.produto[key] && item.produto[key].trim() !== '') {
+                        imagens.push(item.produto[key]);
+                    }
+                }
+                let imgsAdicionais = imagens.join('; ');
+                
+                let marca = item.produto["Marca"] || '';
+                let categoria = item.produto["Nome categoria"] || '';
+                let descricao = (item.produto["Descrição grande"] || '').replace(/"/g, '""').replace(/\n/g, ' ');
+                
+                csv += `"${nome.replace(/"/g, '""')}",${preco},"${valMin}","${valMax}","${imgPrincipal}","${imgsAdicionais}","${marca}","${categoria}","${descricao}"\n`;
+            });
+            
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `planejamento_catalogo_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+        }
+        
+        window.onclick = function (e) { 
+            if (e.target.id == "detailModal") closeModal();
+            if (e.target.id == "imageLightbox") closeLightbox();
+            if (e.target.id == "manualAddModal") closeManualAddModal();
+        }
+    </script>
+
+</body>
+
+</html>
