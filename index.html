@@ -650,7 +650,7 @@
     <header>
         <span>Planejamento de Catálogo</span>
         <span id="itemsLoaded" style="font-size: 12px; color: #a8b3c7; margin-left: auto; margin-right: 20px;"></span>
-        <input type="file" id="fileInput" accept=".csv" style="display:none">
+        <input type="file" id="fileInput" accept=".csv" style="display:none" multiple>
         <input type="file" id="planningInput" accept=".csv" style="display:none">
         <div style="display: flex; gap: 8px;">
             <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Carregar CSV</button>
@@ -763,7 +763,6 @@
                 </div>
 
                 <div class="action-buttons">
-                    <button class="action-btn secondary" onclick="document.getElementById('planningInput').click()">Importar Planejamento</button>
                     <button class="action-btn secondary" onclick="clearSelection()">Limpar Seleção</button>
                     <button class="action-btn" onclick="exportPlan()">Exportar Planejamento</button>
                 </div>
@@ -816,16 +815,143 @@
         let produtos = [];
         let selecionados = {};
         let currentData = [];
+        let mergeField = "Nome produto";
+
+        // ========== FUNÇÕES DE ENCODING ==========
+        function fixCSVEncoding(text) {
+            try {
+                const hasEncodingIssue = /[^\x00-\x7F]/.test(text) && 
+                    (text.includes('PreÃ§o') || text.includes('DescriÃ§Ã£o'));
+                
+                if (hasEncodingIssue) {
+                    console.log("Detectado problema de encoding, tentando corrigir...");
+                    
+                    const latin1ToUtf8 = (str) => {
+                        return str.replace(/[\x80-\xFF]/g, function(chr) {
+                            const code = chr.charCodeAt(0);
+                            if (code >= 0x80 && code <= 0xFF) {
+                                const latin1Map = {
+                                    'Ã¡': 'á', 'Ã©': 'é', 'Ã­': 'í', 'Ã³': 'ó', 'Ãº': 'ú',
+                                    'Ã£': 'ã', 'Ãµ': 'õ', 'Ã§': 'ç', 'Ã': 'à',
+                                    'Ã¢': 'â', 'Ãª': 'ê', 'Ã®': 'î', 'Ã´': 'ô', 'Ã»': 'û',
+                                    'Ã€': 'À', 'Ã‰': 'É', 'Ã': 'Í', 'Ã': 'Ó', 'Ã': 'Ú',
+                                    'Ãƒ': 'Ã', 'Ã•': 'Õ', 'Ã‡': 'Ç'
+                                };
+                                
+                                for (const [key, value] of Object.entries(latin1Map)) {
+                                    if (str.includes(key)) return value;
+                                }
+                            }
+                            return chr;
+                        });
+                    };
+                    
+                    text = latin1ToUtf8(text);
+                }
+                return text;
+            } catch (e) {
+                console.error("Erro ao corrigir encoding:", e);
+                return text;
+            }
+        }
+
+        // ========== FUNÇÃO PARA UNIR MÚLTIPLOS CSVs ==========
+        function unirCSVsPorId(listasDeDados, chaveId = 'Nome produto') {
+            const mapa = new Map();
+            const todasColunas = new Set();
+
+            listasDeDados.forEach((lista, index) => {
+                console.log(`Processando lista ${index + 1} com ${lista.length} itens`);
+                
+                lista.forEach(linha => {
+                    const id = linha[chaveId];
+                    if (!id || id.trim() === '') return;
+
+                    const normalizedId = id.trim();
+                    
+                    Object.keys(linha).forEach(col => todasColunas.add(col));
+
+                    if (!mapa.has(normalizedId)) {
+                        mapa.set(normalizedId, { ...linha });
+                    } else {
+                        const existente = mapa.get(normalizedId);
+                        Object.keys(linha).forEach(col => {
+                            const valorExistente = existente[col];
+                            const valorNovo = linha[col];
+                            
+                            if ((!valorExistente || valorExistente === '' || valorExistente === null) && 
+                                valorNovo && valorNovo !== '' && valorNovo !== null) {
+                                existente[col] = valorNovo;
+                            }
+                        });
+                    }
+                });
+            });
+
+            console.log(`Mesclagem concluída: ${mapa.size} itens únicos, ${todasColunas.size} colunas`);
+            return {
+                dados: Array.from(mapa.values()),
+                colunas: Array.from(todasColunas)
+            };
+        }
 
         function toMoney(v) {
             let n = parseFloat(v || 0);
             return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         }
 
+        // ========== FUNÇÃO MELHORADA PARA EXTRAIR PREÇO ==========
         function getPrice(p) {
-            let priceStr = p["Preço venda"] || "0";
-            priceStr = priceStr.replace(/[^\d,\.]/g, '').replace(',', '.');
-            return parseFloat(priceStr) || 0;
+            if (!p) return 0;
+            
+            let priceStr = '';
+            
+            const possiblePriceFields = [
+                "Preço venda", "Preco venda", "preço venda", "preco venda",
+                "Preço", "preço", "Preco", "preco",
+                "valor", "Valor", "PRECO", "PRECIO"
+            ];
+            
+            for (const field of possiblePriceFields) {
+                if (p[field] !== undefined && p[field] !== null && p[field] !== '') {
+                    priceStr = String(p[field]);
+                    break;
+                }
+            }
+            
+            if (!priceStr || priceStr.trim() === "") return 0;
+            
+            priceStr = priceStr.trim();
+            let cleaned = priceStr.replace(/[^\d,\-\.]/g, '');
+            
+            if (!/\d/.test(cleaned)) return 0;
+            
+            const isNegative = cleaned.startsWith('-');
+            if (isNegative) cleaned = cleaned.substring(1);
+            
+            if (cleaned.includes(',') && cleaned.includes('.')) {
+                const lastCommaIdx = cleaned.lastIndexOf(',');
+                const lastDotIdx = cleaned.lastIndexOf('.');
+                
+                if (lastCommaIdx > lastDotIdx) {
+                    cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+                } else {
+                    cleaned = cleaned.replace(/,/g, '');
+                }
+            } else if (cleaned.includes(',')) {
+                const parts = cleaned.split(',');
+                if (parts.length === 2 && parts[1].length <= 2) {
+                    cleaned = cleaned.replace(',', '.');
+                } else {
+                    cleaned = cleaned.replace(/,/g, '');
+                }
+            }
+            
+            let price = parseFloat(cleaned);
+            
+            if (isNaN(price)) return 0;
+            
+            return isNegative ? -price : price;
         }
 
         function parseValorMonetario(valor) {
@@ -836,47 +962,147 @@
             return isNeg ? -Math.abs(num) : num;
         }
 
-        function detectDelimiter(file) {
+        // ========== FUNÇÃO MELHORADA PARA DETECTAR DELIMITADOR ==========
+        async function detectDelimiter(file) {
             return new Promise((resolve) => {
                 const reader = new FileReader();
                 reader.onload = function(e) {
-                    const firstLine = e.target.result.split('\n')[0];
+                    let text = e.target.result;
+                    text = fixCSVEncoding(text);
+                    
+                    const firstLine = text.split('\n')[0];
+                    console.log("Primeira linha para detectar delimitador:", firstLine.substring(0, 100));
+                    
                     const semiColonCount = (firstLine.match(/;/g) || []).length;
                     const commaCount = (firstLine.match(/,/g) || []).length;
-                    const delimiter = semiColonCount > commaCount ? ";" : ",";
+                    const tabCount = (firstLine.match(/\t/g) || []).length;
+                    
+                    let delimiter = ";";
+                    if (semiColonCount === 0 && commaCount > 0) {
+                        delimiter = ",";
+                    } else if (semiColonCount === 0 && commaCount === 0 && tabCount > 0) {
+                        delimiter = "\t";
+                    }
+                    
+                    console.log(`Delimitador detectado: "${delimiter}" (;=${semiColonCount}, ,=${commaCount}, tab=${tabCount})`);
                     resolve(delimiter);
                 };
-                reader.readAsText(file);
+                reader.readAsText(file, 'ISO-8859-1');
             });
         }
 
-        async function loadCSV(file) {
-            try {
-                const delimiter = await detectDelimiter(file);
-                Papa.parse(file, {
-                    header: true,
-                    delimiter: delimiter,
-                    skipEmptyLines: true,
-                    complete: function (results) {
-                        produtos = results.data.filter(p => p["Nome produto"]);
-                        currentData = [...produtos];
-
-                        document.getElementById('uploadArea').style.display = 'none';
-                        document.getElementById('contentArea').style.display = 'flex';
+        // ========== FUNÇÃO PARA PROCESSAR ARQUIVO CSV ==========
+        async function processCSVFile(file) {
+            return new Promise((resolve, reject) => {
+                detectDelimiter(file).then(delimiter => {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        let text = e.target.result;
+                        text = fixCSVEncoding(text);
                         
-                        document.getElementById('itemsLoaded').textContent = `${produtos.length} itens carregados`;
-
-                        popularFiltros();
-                        renderTable();
-                        atualizarLista();
-                        updateCounters();
-                    },
-                    error: function(error) {
-                        alert('Erro ao carregar arquivo CSV: ' + error.message);
+                        Papa.parse(text, {
+                            header: true,
+                            delimiter: delimiter,
+                            skipEmptyLines: true,
+                            complete: function(results) {
+                                const dadosFiltrados = results.data.filter(p => {
+                                    const nome = p["Nome produto"] || p["Nome"];
+                                    return nome && nome.trim() !== "";
+                                });
+                                
+                                console.log(`Arquivo "${file.name}" carregado: ${dadosFiltrados.length} itens válidos`);
+                                
+                                if (dadosFiltrados.length > 0) {
+                                    const firstItem = dadosFiltrados[0];
+                                    console.log("Primeiro item:", {
+                                        nome: firstItem["Nome produto"],
+                                        preco: firstItem["Preço venda"],
+                                        precoExtraido: getPrice(firstItem)
+                                    });
+                                }
+                                
+                                resolve(dadosFiltrados);
+                            },
+                            error: function(error) {
+                                reject(new Error(`Erro ao parsear CSV: ${error.message}`));
+                            }
+                        });
+                    };
+                    
+                    try {
+                        reader.readAsText(file, 'ISO-8859-1');
+                    } catch (e) {
+                        reader.readAsText(file);
                     }
-                });
+                }).catch(reject);
+            });
+        }
+
+        // ========== FUNÇÃO PRINCIPAL PARA CARREGAR CSVs ==========
+        async function loadCSV(files) {
+            try {
+                if (!files || files.length === 0) return;
+                
+                const fileArray = Array.from(files);
+                document.getElementById('itemsLoaded').textContent = `Carregando ${fileArray.length} arquivo(s)...`;
+                
+                if (produtos.length === 0 && fileArray.length > 0) {
+                    const dados = await processCSVFile(fileArray[0]);
+                    produtos = dados;
+                    currentData = [...produtos];
+                    
+                    document.getElementById('uploadArea').style.display = 'none';
+                    document.getElementById('contentArea').style.display = 'flex';
+                    document.getElementById('itemsLoaded').textContent = `${produtos.length} itens carregados`;
+                    
+                    popularFiltros();
+                    renderTable();
+                    atualizarLista();
+                    updateCounters();
+                    
+                    if (fileArray.length > 1) {
+                        for (let i = 1; i < fileArray.length; i++) {
+                            await processAdditionalCSV(fileArray[i]);
+                        }
+                    }
+                } else {
+                    for (const file of fileArray) {
+                        await processAdditionalCSV(file);
+                    }
+                }
+                
             } catch (error) {
-                alert('Erro ao processar arquivo: ' + error.message);
+                console.error("Erro ao carregar CSV:", error);
+                alert('Erro ao carregar arquivo CSV: ' + error.message);
+                document.getElementById('itemsLoaded').textContent = 'Erro ao carregar arquivo';
+            }
+        }
+
+        // ========== PROCESSA ARQUIVO ADICIONAL E MESCLA ==========
+        async function processAdditionalCSV(file) {
+            try {
+                document.getElementById('itemsLoaded').textContent = `Mesclando ${file.name}...`;
+                
+                const novosDados = await processCSVFile(file);
+                const antes = produtos.length;
+                
+                const resultado = unirCSVsPorId([produtos, novosDados], mergeField);
+                produtos = resultado.dados;
+                currentData = [...produtos];
+                
+                const novosItens = produtos.length - antes;
+                
+                popularFiltros();
+                renderTable();
+                updateCounters();
+                
+                document.getElementById('itemsLoaded').textContent = `${produtos.length} itens carregados (${novosItens} novos)`;
+                
+                console.log(`Mesclado ${file.name}: ${novosItens} novos itens adicionados`);
+                
+            } catch (error) {
+                console.error(`Erro ao processar ${file.name}:`, error);
+                alert(`Erro ao processar ${file.name}: ${error.message}`);
             }
         }
 
@@ -888,8 +1114,13 @@
             const planningInput = document.getElementById('planningInput');
             const uploadArea = document.getElementById('uploadArea');
 
+            fileInput.multiple = true;
+
             fileInput.addEventListener('change', e => {
-                if (e.target.files.length) loadCSV(e.target.files[0]);
+                if (e.target.files.length) {
+                    loadCSV(e.target.files);
+                    e.target.value = '';
+                }
             });
 
             planningInput.addEventListener('change', e => {
@@ -897,24 +1128,26 @@
             });
 
             uploadArea.addEventListener('dragover', e => {
-                e.preventDefault(); 
+                e.preventDefault();
                 uploadArea.style.background = '#1a1f27';
             });
 
             uploadArea.addEventListener('dragleave', e => {
-                e.preventDefault(); 
+                e.preventDefault();
                 uploadArea.style.background = 'transparent';
             });
 
             uploadArea.addEventListener('drop', e => {
-                e.preventDefault(); 
+                e.preventDefault();
                 uploadArea.style.background = 'transparent';
                 if (e.dataTransfer.files.length) {
-                    const file = e.dataTransfer.files[0];
-                    if (file.name.endsWith('.csv')) {
-                        loadCSV(file);
+                    const csvFiles = Array.from(e.dataTransfer.files)
+                        .filter(file => file.name.toLowerCase().endsWith('.csv'));
+                    
+                    if (csvFiles.length > 0) {
+                        loadCSV(csvFiles);
                     } else {
-                        alert('Por favor, selecione um arquivo CSV');
+                        alert('Por favor, selecione arquivos CSV');
                     }
                 }
             });
